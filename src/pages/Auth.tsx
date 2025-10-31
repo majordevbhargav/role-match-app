@@ -1,36 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Briefcase } from "lucide-react";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const { signIn, signUp, user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      // Error handled in useAuth
+    } finally {
       setIsLoading(false);
-      toast.success("Login successful!");
-    }, 1500);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+
+    try {
+      await signUp(email, password, firstName, lastName);
+    } catch (error) {
+      // Error handled in useAuth
+    } finally {
       setIsLoading(false);
-      toast.success("Account created! Welcome to SmartApply.");
-    }, 1500);
+    }
   };
 
   return (
@@ -64,6 +86,7 @@ const Auth = () => {
                   <Label htmlFor="login-email">Email</Label>
                   <Input
                     id="login-email"
+                    name="email"
                     type="email"
                     placeholder="you@example.com"
                     required
@@ -74,6 +97,7 @@ const Auth = () => {
                   <Label htmlFor="login-password">Password</Label>
                   <Input
                     id="login-password"
+                    name="password"
                     type="password"
                     placeholder="••••••••"
                     required
@@ -93,6 +117,7 @@ const Auth = () => {
                     <Label htmlFor="signup-firstname">First Name</Label>
                     <Input
                       id="signup-firstname"
+                      name="firstName"
                       placeholder="John"
                       required
                     />
@@ -102,6 +127,7 @@ const Auth = () => {
                     <Label htmlFor="signup-lastname">Last Name</Label>
                     <Input
                       id="signup-lastname"
+                      name="lastName"
                       placeholder="Doe"
                       required
                     />
@@ -112,6 +138,7 @@ const Auth = () => {
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
                     id="signup-email"
+                    name="email"
                     type="email"
                     placeholder="you@example.com"
                     required
@@ -122,8 +149,10 @@ const Auth = () => {
                   <Label htmlFor="signup-password">Password</Label>
                   <Input
                     id="signup-password"
+                    name="password"
                     type="password"
                     placeholder="••••••••"
+                    minLength={6}
                     required
                   />
                 </div>

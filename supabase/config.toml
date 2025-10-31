@@ -1,1 +1,4 @@
 project_id = "ffwvgeoderjtqhszhghc"
+
+[functions.ai-job-match]
+verify_jwt = true
