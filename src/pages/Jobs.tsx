@@ -1,99 +1,110 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Briefcase, MapPin, Clock, DollarSign, Search, Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
-const jobs = [
-  {
-    id: 1,
-    title: "Senior Full Stack Developer",
-    company: "Tech Innovations Inc",
-    location: "San Francisco, CA",
-    type: "Full-time",
-    salary: "$120k - $180k",
-    posted: "2 days ago",
-    tags: ["React", "Node.js", "TypeScript", "AWS"],
-    description: "Looking for an experienced full stack developer to join our growing team."
-  },
-  {
-    id: 2,
-    title: "UI/UX Designer",
-    company: "Creative Studio",
-    location: "Remote",
-    type: "Full-time",
-    salary: "$90k - $130k",
-    posted: "1 week ago",
-    tags: ["Figma", "Design Systems", "User Research"],
-    description: "Create beautiful and intuitive user experiences for our products."
-  },
-  {
-    id: 3,
-    title: "Data Analyst",
-    company: "Analytics Corp",
-    location: "New York, NY",
-    type: "Full-time",
-    salary: "$85k - $115k",
-    posted: "3 days ago",
-    tags: ["Python", "SQL", "Tableau", "Statistics"],
-    description: "Analyze data to drive business decisions and insights."
-  },
-  {
-    id: 4,
-    title: "Product Manager",
-    company: "Growth Ventures",
-    location: "Austin, TX",
-    type: "Full-time",
-    salary: "$110k - $150k",
-    posted: "5 days ago",
-    tags: ["Product Strategy", "Agile", "Analytics"],
-    description: "Lead product development from concept to launch."
-  },
-  {
-    id: 5,
-    title: "DevOps Engineer",
-    company: "Cloud Systems Ltd",
-    location: "Seattle, WA",
-    type: "Full-time",
-    salary: "$130k - $170k",
-    posted: "1 day ago",
-    tags: ["Kubernetes", "Docker", "CI/CD", "AWS"],
-    description: "Build and maintain our cloud infrastructure."
-  },
-  {
-    id: 6,
-    title: "Frontend Developer",
-    company: "Digital Agency",
-    location: "Remote",
-    type: "Contract",
-    salary: "$80k - $110k",
-    posted: "4 days ago",
-    tags: ["React", "Next.js", "Tailwind CSS"],
-    description: "Create responsive and performant web applications."
-  }
-];
+interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  job_type: string;
+  salary_min: number;
+  salary_max: number;
+  requirements: string[];
+  description: string;
+  experience_level: string;
+  created_at: string;
+}
 
 const Jobs = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
-  const handleQuickApply = (jobTitle: string, company: string) => {
-    toast.success(`Application submitted to ${company} for ${jobTitle}!`, {
-      description: "Your profile and matching resume were automatically attached."
-    });
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const fetchJobs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setJobs(data || []);
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      toast.error('Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickApply = async (jobId: string, jobTitle: string, company: string) => {
+    if (!user) {
+      toast.error('Please sign in to apply');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .insert({
+          user_id: user.id,
+          job_id: jobId,
+          status: 'applied'
+        });
+
+      if (error) throw error;
+
+      toast.success(`Application submitted to ${company} for ${jobTitle}!`, {
+        description: "Your profile was automatically attached."
+      });
+    } catch (error: any) {
+      if (error.code === '23505') {
+        toast.error('You have already applied to this job');
+      } else {
+        console.error('Error applying:', error);
+        toast.error('Failed to submit application');
+      }
+    }
   };
 
   const filteredJobs = jobs.filter(job =>
     job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    job.requirements?.some(req => req.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const formatSalary = (min: number, max: number) => {
+    if (!min || !max) return 'Salary not specified';
+    return `$${(min / 1000).toFixed(0)}k - $${(max / 1000).toFixed(0)}k`;
+  };
+
+  const getTimeAgo = (date: string) => {
+    const days = Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 3600 * 24));
+    if (days === 0) return 'Today';
+    if (days === 1) return '1 day ago';
+    if (days < 7) return `${days} days ago`;
+    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    return `${Math.floor(days / 30)} months ago`;
+  };
+
   return (
-    <div className="min-h-screen bg-muted/30">
-      <nav className="bg-background border-b border-border sticky top-0 z-50 backdrop-blur-md bg-background/80">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+      <nav className="bg-background/80 backdrop-blur-md border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2 text-2xl font-bold">
@@ -118,12 +129,14 @@ const Jobs = () => {
       </nav>
       
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Browse Jobs</h1>
-          <p className="text-muted-foreground">Find your next opportunity and apply instantly</p>
+        <div className="mb-8 animate-fade-in">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Browse Jobs
+          </h1>
+          <p className="text-muted-foreground text-lg">Find your next opportunity and apply instantly</p>
         </div>
         
-        <Card className="mb-8 shadow-[var(--shadow-medium)]">
+        <Card className="mb-8 shadow-[var(--shadow-medium)] border-2 animate-fade-in">
           <CardContent className="pt-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -131,70 +144,97 @@ const Jobs = () => {
                 placeholder="Search by job title, company, or skills..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-12"
+                className="pl-10 h-12 text-base"
               />
             </div>
           </CardContent>
         </Card>
         
-        <div className="grid gap-6">
-          {filteredJobs.map((job) => (
-            <Card key={job.id} className="hover:shadow-[var(--shadow-medium)] transition-all hover:-translate-y-1">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="h-12 w-12 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center flex-shrink-0">
-                      <Building2 className="h-6 w-6 text-primary-foreground" />
+        {loading ? (
+          <div className="grid gap-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6">
+            {filteredJobs.map((job) => (
+              <Card 
+                key={job.id} 
+                className="hover:shadow-[var(--shadow-large)] transition-all duration-300 hover:-translate-y-1 animate-fade-in border-2"
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="h-14 w-14 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-soft)]">
+                        <Building2 className="h-7 w-7 text-primary-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <CardTitle className="text-xl mb-1">{job.title}</CardTitle>
+                        <CardDescription className="text-base font-medium">{job.company}</CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-xl mb-1">{job.title}</CardTitle>
-                      <CardDescription className="text-base">{job.company}</CardDescription>
+                    <Button 
+                      variant="hero" 
+                      onClick={() => handleQuickApply(job.id, job.title, job.company)}
+                      className="flex-shrink-0"
+                    >
+                      Quick Apply
+                    </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <p className="text-muted-foreground leading-relaxed">{job.description}</p>
+                  
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      {job.location}
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Briefcase className="h-4 w-4 text-primary" />
+                      {job.job_type || 'Full-time'}
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      {formatSalary(job.salary_min, job.salary_max)}
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4 text-primary" />
+                      {getTimeAgo(job.created_at)}
                     </div>
                   </div>
-                  <Button variant="hero" onClick={() => handleQuickApply(job.title, job.company)}>
-                    Quick Apply
-                  </Button>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <p className="text-muted-foreground">{job.description}</p>
-                
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    {job.location}
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Briefcase className="h-4 w-4" />
-                    {job.type}
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <DollarSign className="h-4 w-4" />
-                    {job.salary}
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    {job.posted}
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                  {job.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  
+                  {job.requirements && job.requirements.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {job.requirements.map((req, index) => (
+                        <Badge key={index} variant="secondary" className="px-3 py-1">
+                          {req}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
         
-        {filteredJobs.length === 0 && (
-          <Card className="text-center py-12">
+        {!loading && filteredJobs.length === 0 && (
+          <Card className="text-center py-16 border-2 border-dashed">
             <CardContent>
-              <p className="text-muted-foreground">No jobs found matching your search.</p>
+              <Building2 className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <p className="text-xl font-semibold mb-2">No jobs found</p>
+              <p className="text-muted-foreground">Try adjusting your search criteria</p>
             </CardContent>
           </Card>
         )}

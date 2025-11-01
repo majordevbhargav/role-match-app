@@ -1,23 +1,207 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Briefcase, Upload, Plus, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Briefcase, Plus, X, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+interface Profile {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  location: string;
+  bio: string;
+}
+
+interface Skill {
+  id: string;
+  skill_name: string;
+  proficiency: string;
+}
+
+interface Experience {
+  id: string;
+  position: string;
+  company_name: string;
+  start_date: string;
+  end_date: string | null;
+  is_current: boolean;
+  description: string;
+}
 
 const Profile = () => {
-  const handleSave = () => {
-    toast.success("Profile updated successfully!");
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile>({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    bio: ''
+  });
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [newSkill, setNewSkill] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+      fetchSkills();
+      fetchExperiences();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setProfile({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          location: data.location || '',
+          bio: data.bio || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const skills = ["React", "TypeScript", "Node.js", "Python", "SQL"];
+  const fetchSkills = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('skills')
+        .select('*')
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+      setSkills(data || []);
+    } catch (error) {
+      console.error('Error fetching skills:', error);
+    }
+  };
+
+  const fetchExperiences = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('experience')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('start_date', { ascending: false });
+
+      if (error) throw error;
+      setExperiences(data || []);
+    } catch (error) {
+      console.error('Error fetching experiences:', error);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(profile)
+        .eq('id', user?.id);
+
+      if (error) throw error;
+      toast.success("Profile updated successfully!");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error("Failed to update profile");
+    }
+  };
+
+  const handleAddSkill = async () => {
+    if (!newSkill.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from('skills')
+        .insert({
+          user_id: user?.id,
+          skill_name: newSkill,
+          proficiency: 'intermediate'
+        });
+
+      if (error) throw error;
+      setNewSkill('');
+      fetchSkills();
+      toast.success("Skill added!");
+    } catch (error) {
+      console.error('Error adding skill:', error);
+      toast.error("Failed to add skill");
+    }
+  };
+
+  const handleDeleteSkill = async (skillId: string) => {
+    try {
+      const { error } = await supabase
+        .from('skills')
+        .delete()
+        .eq('id', skillId);
+
+      if (error) throw error;
+      fetchSkills();
+      toast.success("Skill removed!");
+    } catch (error) {
+      console.error('Error deleting skill:', error);
+      toast.error("Failed to remove skill");
+    }
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+        <nav className="bg-background border-b border-border">
+          <div className="container mx-auto px-4 py-4">
+            <Skeleton className="h-10 w-48" />
+          </div>
+        </nav>
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <Skeleton className="h-12 w-64 mb-8" />
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-48" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-32 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <nav className="bg-background border-b border-border">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
+      <nav className="bg-background/80 backdrop-blur-md border-b border-border sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2 text-2xl font-bold">
@@ -42,13 +226,15 @@ const Profile = () => {
       </nav>
       
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Your Profile</h1>
-          <p className="text-muted-foreground">Keep your information up to date for quick applications</p>
+        <div className="mb-8 animate-fade-in">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Your Profile
+          </h1>
+          <p className="text-muted-foreground text-lg">Keep your information up to date for quick applications</p>
         </div>
         
         <div className="space-y-6">
-          <Card>
+          <Card className="border-2 animate-fade-in shadow-[var(--shadow-medium)]">
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
               <CardDescription>Basic details about you</CardDescription>
@@ -57,32 +243,55 @@ const Profile = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" placeholder="John" defaultValue="John" />
+                  <Input 
+                    id="firstName" 
+                    value={profile.first_name}
+                    onChange={(e) => setProfile({...profile, first_name: e.target.value})}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" placeholder="Doe" defaultValue="Doe" />
+                  <Input 
+                    id="lastName" 
+                    value={profile.last_name}
+                    onChange={(e) => setProfile({...profile, last_name: e.target.value})}
+                  />
                 </div>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="john@example.com" defaultValue="john@example.com" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={profile.email}
+                  disabled
+                  className="bg-muted"
+                />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
+                <Input 
+                  id="phone" 
+                  type="tel" 
+                  value={profile.phone}
+                  onChange={(e) => setProfile({...profile, phone: e.target.value})}
+                />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="location">Location</Label>
-                <Input id="location" placeholder="San Francisco, CA" />
+                <Input 
+                  id="location" 
+                  value={profile.location}
+                  onChange={(e) => setProfile({...profile, location: e.target.value})}
+                />
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-2 animate-fade-in shadow-[var(--shadow-medium)]">
             <CardHeader>
               <CardTitle>Professional Summary</CardTitle>
               <CardDescription>Tell employers about yourself</CardDescription>
@@ -91,100 +300,83 @@ const Profile = () => {
               <Textarea
                 placeholder="Experienced software developer with 5+ years in full-stack development..."
                 className="min-h-[120px]"
+                value={profile.bio}
+                onChange={(e) => setProfile({...profile, bio: e.target.value})}
               />
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-2 animate-fade-in shadow-[var(--shadow-medium)]">
             <CardHeader>
               <CardTitle>Skills</CardTitle>
               <CardDescription>Add your technical and professional skills</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {skills.map((skill, index) => (
-                  <Badge key={index} variant="secondary" className="text-sm px-3 py-1">
-                    {skill}
-                    <button className="ml-2 hover:text-destructive">
+                {skills.map((skill) => (
+                  <Badge key={skill.id} variant="secondary" className="text-sm px-3 py-1.5">
+                    {skill.skill_name}
+                    <button 
+                      className="ml-2 hover:text-destructive transition-colors"
+                      onClick={() => handleDeleteSkill(skill.id)}
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
                 ))}
               </div>
               <div className="flex gap-2">
-                <Input placeholder="Add a skill" />
-                <Button variant="outline">
+                <Input 
+                  placeholder="Add a skill" 
+                  value={newSkill}
+                  onChange={(e) => setNewSkill(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+                />
+                <Button variant="outline" onClick={handleAddSkill}>
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-2 animate-fade-in shadow-[var(--shadow-medium)]">
             <CardHeader>
               <CardTitle>Experience</CardTitle>
               <CardDescription>Your work history</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="p-4 border border-border rounded-lg">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 className="font-semibold">Senior Developer</h4>
-                      <p className="text-sm text-muted-foreground">Tech Company Inc</p>
+              {experiences.length > 0 ? (
+                <div className="space-y-4">
+                  {experiences.map((exp) => (
+                    <div key={exp.id} className="p-4 border-2 border-border rounded-lg hover:border-primary transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h4 className="font-semibold text-lg">{exp.position}</h4>
+                          <p className="text-sm text-muted-foreground font-medium">{exp.company_name}</p>
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(exp.start_date)} - {exp.is_current ? 'Present' : formatDate(exp.end_date!)}
+                        </span>
+                      </div>
+                      {exp.description && (
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {exp.description}
+                        </p>
+                      )}
                     </div>
-                    <span className="text-sm text-muted-foreground">2020 - Present</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Led development of multiple web applications using React and Node.js.
-                  </p>
+                  ))}
                 </div>
-              </div>
-              <Button variant="outline" className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Experience
-              </Button>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No experience added yet</p>
+              )}
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumes</CardTitle>
-              <CardDescription>Upload different resumes for different roles</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer">
-                <Upload className="h-8 w-8 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Click to upload or drag and drop
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  PDF, DOC, DOCX (max 5MB)
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 border border-border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center">
-                      <Briefcase className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Full_Stack_Resume.pdf</p>
-                      <p className="text-xs text-muted-foreground">Uploaded 2 days ago</p>
-                    </div>
-                  </div>
-                  <Badge variant="secondary">Full Stack Developer</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <div className="flex justify-end gap-4">
+          <div className="flex justify-end gap-4 sticky bottom-4 bg-background/80 backdrop-blur-md p-4 rounded-lg border border-border shadow-[var(--shadow-medium)]">
             <Link to="/dashboard">
-              <Button variant="outline">Cancel</Button>
+              <Button variant="outline" size="lg">Cancel</Button>
             </Link>
-            <Button variant="hero" onClick={handleSave}>
+            <Button variant="hero" size="lg" onClick={handleSaveProfile}>
               Save Changes
             </Button>
           </div>
